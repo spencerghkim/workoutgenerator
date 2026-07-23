@@ -77,19 +77,6 @@
                             </select>
                         </div>
 
-                        <hr class="text-muted border-2 border-dashed my-4">
-
-                        <div class="mb-4">
-                            <label class="form-label fw-semibold">Pacing Basis:</label>
-                            <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="pacingBasis" id="basisCurrent" value="current" checked autocomplete="off">
-                                <label class="btn btn-outline-primary fw-bold" for="basisCurrent">Use Current Fitness</label>
-
-                                <input type="radio" class="btn-check" name="pacingBasis" id="basisGoal" value="goal" autocomplete="off">
-                                <label class="btn btn-outline-primary fw-bold" for="basisGoal">Use Race Goal</label>
-                            </div>
-                        </div>
-
                         <div class="mb-4">
                             <label for="type" class="form-label fw-semibold">Workout Type:</label>
                             <select class="form-select" id="type">
@@ -331,6 +318,50 @@
         return (1609.34 / v) * 60; // seconds per mile
     };
 
+    const calcMetrics = (vdot, type, targetDistVal, ratioPercent) => {
+        let targetPaceSec = 0;
+        let workSec = 0;
+        let targetDistMi = 0;
+
+        if (type === 'vo2') {
+            targetDistMi = targetDistVal / 1609.34;
+            targetPaceSec = getPaceFromVDOT(vdot, 1.00); 
+            workSec = Math.round(targetPaceSec * targetDistMi);
+        } else if (type === 'lt') {
+            targetDistMi = targetDistVal / 1609.34;
+            targetPaceSec = getPaceFromVDOT(vdot, 0.94); 
+            workSec = Math.round(targetPaceSec * targetDistMi);
+        } else if (type === 'tempo') {
+            workSec = targetDistVal * 60; 
+
+            if (targetDistVal === 15) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.95);
+            } else if (targetDistVal === 20) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.94);
+            } else if (targetDistVal === 30) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.90);
+            } else if (targetDistVal === 45) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.86);
+            } else {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.82);
+            }
+            targetDistMi = workSec / targetPaceSec;
+        }
+
+        const targetRatio = ratioPercent / 100.0;
+        let restSec = Math.round(workSec * targetRatio);
+        let restSecString = (ratioPercent === 0) ? "None" : fmtLong(restSec);
+        let targetMPH = (3600 / targetPaceSec).toFixed(1);
+
+        return {
+            targetPaceSec,
+            targetMPH,
+            workSec,
+            targetDistMi,
+            restSecString
+        };
+    };
+
     document.getElementById('calc').onsubmit = (e) => {
         e.preventDefault();
         
@@ -339,79 +370,52 @@
         const raceDistMi = parseFloat(document.getElementById('raceDist').value);
         const targetDistVal = parseFloat(document.getElementById('dist').value);
         const type = document.getElementById('type').value;
-        const pacingBasis = document.querySelector('input[name="pacingBasis"]:checked').value;
-
-        let vdot = 0;
-        if (pacingBasis === 'goal') {
-            vdot = calculateVDOT(26.2188 * 1609.34, goalSec);
-        } else {
-            vdot = calculateVDOT(raceDistMi * 1609.34, timeSec);
-        }
-
-        let targetPaceSec;
-        let workSec;
-        let targetDistMi;
-
-        if (type === 'vo2') {
-            targetDistMi = targetDistVal / 1609.34;
-            targetPaceSec = getPaceFromVDOT(vdot, 1.00); // 100% VDOT (5K / VO2max Pace)
-            workSec = Math.round(targetPaceSec * targetDistMi);
-        } else if (type === 'lt') {
-            targetDistMi = targetDistVal / 1609.34;
-            targetPaceSec = getPaceFromVDOT(vdot, 0.94); // 94% VDOT (Cruise Intervals / 10K Pace)
-            workSec = Math.round(targetPaceSec * targetDistMi);
-        } else if (type === 'tempo') {
-            workSec = targetDistVal * 60; 
-
-            if (targetDistVal === 15) {
-                targetPaceSec = getPaceFromVDOT(vdot, 0.95); // 95% VDOT (15m Short Tempo / 6:05 pace)
-            } else if (targetDistVal === 20) {
-                targetPaceSec = getPaceFromVDOT(vdot, 0.94); // 94% VDOT (20m Standard Threshold)
-            } else if (targetDistVal === 30) {
-                targetPaceSec = getPaceFromVDOT(vdot, 0.90); // 90% VDOT (30m Extended Threshold)
-            } else if (targetDistVal === 45) {
-                targetPaceSec = getPaceFromVDOT(vdot, 0.86); // 86% VDOT (45m HM Pace Tempo)
-            } else {
-                targetPaceSec = getPaceFromVDOT(vdot, 0.82); // 82% VDOT (60m Marathon Pace Block)
-            }
-            targetDistMi = workSec / targetPaceSec;
-        }
-        
         const ratioPercent = parseInt(ratioInput.value) || 0;
-        const targetRatio = ratioPercent / 100.0;
-        
-        let restSec = Math.round(workSec * targetRatio);
-        let restSecString = (ratioPercent === 0) ? "None" : fmtLong(restSec);
 
-        let goalMPString = "";
-        if (goalSec > 0) {
-            let goalMPSec = goalSec / 26.2188;
-            let goalMPH = (3600 / goalMPSec).toFixed(1);
-            goalMPString = "<small class='text-uppercase fw-bold text-muted d-block mb-2'>Target Goal MP: " + fmt(goalMPSec) + "/mi (" + goalMPH + " mph)</small>";
-        }
+        const vdotCurrent = calculateVDOT(raceDistMi * 1609.34, timeSec);
+        const vdotGoal = calculateVDOT(26.2188 * 1609.34, goalSec);
 
-        let targetMPH = (3600 / targetPaceSec).toFixed(1);
+        const currentMetrics = calcMetrics(vdotCurrent, type, targetDistVal, ratioPercent);
+        const goalMetrics = calcMetrics(vdotGoal, type, targetDistVal, ratioPercent);
+
+        let goalMPSec = goalSec / 26.2188;
+        let goalMPH = (3600 / goalMPSec).toFixed(1);
+        let goalMPHeader = "<small class='text-uppercase fw-bold text-muted d-block mb-3 text-center'>Target Goal MP: " + fmt(goalMPSec) + "/mi (" + goalMPH + " mph)</small>";
 
         let warningString = "";
-        if (type === 'vo2' && workSec >= 300) {
-            warningString = "<div class='alert alert-warning shadow-sm border-0 mt-3 mb-0' role='alert' style='font-size: 0.9em;'><strong>⚠️ JD Limit Reached:</strong> Jack Daniels advises VO2max reps should not exceed 5 minutes. Consider selecting a shorter Target Rep Distance to prevent form breakdown and excessive lactic buildup.</div>";
+        if (type === 'vo2' && (currentMetrics.workSec >= 300 || goalMetrics.workSec >= 300)) {
+            warningString = "<div class='alert alert-warning shadow-sm border-0 mt-3 mb-0' role='alert' style='font-size: 0.9em;'><strong>⚠️ JD Limit Reached:</strong> Jack Daniels advises VO2max reps should not exceed 5 minutes. Consider selecting a shorter Target Rep Distance.</div>";
         }
 
-        // Build output block safely using basic concatenation and formatting to avoid any template literal escaping bugs across browsers
-        let outputBody = "";
-        if (type === 'tempo') {
-            outputBody = "<p class='mb-1'><strong>Total Duration:</strong> " + fmtLong(workSec) + "</p>" +
-                         "<p class='mb-0'><strong>Total Distance Covered:</strong> " + targetDistMi.toFixed(2) + " Miles</p>";
-        } else {
-            outputBody = "<p class='mb-1'><strong>Work Time per rep:</strong> " + fmtLong(workSec) + "</p>" +
-                         "<p class='mb-0'><strong>Rest Time per rep:</strong> " + restSecString + "</p>";
-        }
+        let renderCol = (title, vdotVal, m) => {
+            let body = "";
+            if (type === 'tempo') {
+                body = "<p class='mb-1'><strong>Duration:</strong> " + fmtLong(m.workSec) + "</p>" +
+                       "<p class='mb-0'><strong>Distance:</strong> " + m.targetDistMi.toFixed(2) + " mi</p>";
+            } else {
+                body = "<p class='mb-1'><strong>Work Rep:</strong> " + fmtLong(m.workSec) + "</p>" +
+                       "<p class='mb-0'><strong>Rest Rep:</strong> " + m.restSecString + "</p>";
+            }
 
-        document.getElementById('out').innerHTML = "<div class='alert alert-primary shadow-sm border-0 mb-0' role='alert'>" +
-                goalMPString +
-                "<hr class='border-primary opacity-25'>" +
-                "<p class='mb-1'><strong>Target Pace:</strong> " + fmt(targetPaceSec) + " / mi (" + targetMPH + " mph)</p>" +
-                outputBody +
+            return "<div class='col-6'>" +
+                       "<div class='p-3 bg-white rounded border shadow-sm h-100'>" +
+                           "<h6 class='fw-bold text-primary mb-1'>" + title + "</h6>" +
+                           "<small class='text-muted d-block mb-2'>VDOT " + vdotVal.toFixed(1) + "</small>" +
+                           "<hr class='my-2 opacity-25'>" +
+                           "<p class='mb-1 fs-5 fw-bolder text-dark'>" + fmt(m.targetPaceSec) + " <span class='fs-6 fw-normal text-muted'>/mi</span></p>" +
+                           "<small class='text-muted d-block mb-2'>(" + m.targetMPH + " mph)</small>" +
+                           "<hr class='my-2 opacity-25'>" +
+                           body +
+                       "</div>" +
+                   "</div>";
+        };
+
+        document.getElementById('out').innerHTML = "<div class='alert alert-primary shadow-sm border-0 mb-0 p-3' role='alert'>" +
+                goalMPHeader +
+                "<div class='row g-2'>" +
+                    renderCol("Current Fitness", vdotCurrent, currentMetrics) +
+                    renderCol("Race Goal", vdotGoal, goalMetrics) +
+                "</div>" +
             "</div>" + warningString;
     };
 </script>
