@@ -77,6 +77,19 @@
                             </select>
                         </div>
 
+                        <hr class="text-muted border-2 border-dashed my-4">
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Pacing Basis (Select one or both):</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="checkbox" class="btn-check" id="showCurrent" autocomplete="off">
+                                <label class="btn btn-outline-primary fw-bold" for="showCurrent">Use Current Fitness</label>
+
+                                <input type="checkbox" class="btn-check" id="showGoal" checked autocomplete="off">
+                                <label class="btn btn-outline-primary fw-bold" for="showGoal">Use Race Goal</label>
+                            </div>
+                        </div>
+
                         <div class="mb-4">
                             <label for="type" class="form-label fw-semibold">Workout Type:</label>
                             <select class="form-select" id="type">
@@ -372,6 +385,15 @@
         const type = document.getElementById('type').value;
         const ratioPercent = parseInt(ratioInput.value) || 0;
 
+        let showCurrent = document.getElementById('showCurrent').checked;
+        let showGoal = document.getElementById('showGoal').checked;
+
+        // Fallback: If neither button is selected, default to Race Goal
+        if (!showCurrent && !showGoal) {
+            showGoal = true;
+            document.getElementById('showGoal').checked = true;
+        }
+
         const vdotCurrent = calculateVDOT(raceDistMi * 1609.34, timeSec);
         const vdotGoal = calculateVDOT(26.2188 * 1609.34, goalSec);
 
@@ -383,9 +405,11 @@
         let goalMPHeader = "<small class='text-uppercase fw-bold text-muted d-block mb-3 text-center'>Target Goal MP: " + fmt(goalMPSec) + "/mi (" + goalMPH + " mph)</small>";
 
         let warningString = "";
-        if (type === 'vo2' && (currentMetrics.workSec >= 300 || goalMetrics.workSec >= 300)) {
+        if (type === 'vo2' && ((showCurrent && currentMetrics.workSec >= 300) || (showGoal && goalMetrics.workSec >= 300))) {
             warningString = "<div class='alert alert-warning shadow-sm border-0 mt-3 mb-0' role='alert' style='font-size: 0.9em;'><strong>⚠️ JD Limit Reached:</strong> Jack Daniels advises VO2max reps should not exceed 5 minutes. Consider selecting a shorter Target Rep Distance.</div>";
         }
+
+        const colClass = (showCurrent && showGoal) ? "col-6" : "col-12";
 
         let renderCol = (title, vdotVal, m) => {
             let body = "";
@@ -397,7 +421,7 @@
                        "<p class='mb-0'><strong>Rest Rep:</strong> " + m.restSecString + "</p>";
             }
 
-            return "<div class='col-6'>" +
+            return "<div class='" + colClass + "'>" +
                        "<div class='p-3 bg-white rounded border shadow-sm h-100'>" +
                            "<h6 class='fw-bold text-primary mb-1'>" + title + "</h6>" +
                            "<small class='text-muted d-block mb-2'>VDOT " + vdotVal.toFixed(1) + "</small>" +
@@ -410,11 +434,14 @@
                    "</div>";
         };
 
+        let colsHTML = "";
+        if (showCurrent) colsHTML += renderCol("Based on Current Fitness", vdotCurrent, currentMetrics);
+        if (showGoal) colsHTML += renderCol("Based on Race Goal", vdotGoal, goalMetrics);
+
         document.getElementById('out').innerHTML = "<div class='alert alert-primary shadow-sm border-0 mb-0 p-3' role='alert'>" +
                 goalMPHeader +
-                "<div class='row g-2'>" +
-                    renderCol("Based on Current Fitness", vdotCurrent, currentMetrics) +
-                    renderCol("Based on Race Goal", vdotGoal, goalMetrics) +
+                "<div class='row g-2 justify-content-center'>" +
+                    colsHTML +
                 "</div>" +
             "</div>" + warningString;
     };
