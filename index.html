@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Running Workout Calculator (VDOT Engine)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .vdot-circle {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 4.5px solid #8A2BE2; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff;
+        }
+        .vdot-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #4a4a4a;
+            letter-spacing: 1px;
+            margin-bottom: 1px;
+        }
+        .vdot-value {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: #333;
+            line-height: 1;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 mb-5">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white text-dark d-flex justify-content-between align-items-center py-3 border-bottom">
+                    <h5 class="mb-0 fw-bolder">Running Workout Calculator</h5>
+                    
+                    <div class="vdot-circle shadow-sm" id="vdotCircleContainer" style="display: none;">
+                        <span class="vdot-label">VDOT</span>
+                        <span class="vdot-value" id="headerVdotNum"></span>
+                    </div>
+
+                </div>
+                <div class="card-body bg-white pt-4">
+                    <form id="calc">
+                        
+                        <div class="mb-3">
+                            <label for="raceDist" class="form-label fw-semibold">Event Distance:</label>
+                            <select class="form-select" id="raceDist">
+                                <option value="3.10686">5K</option>
+                                <option value="6.21371">10K</option>
+                                <option value="13.1094" selected>Half Marathon</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="raceTime" class="form-label fw-semibold">Event Time (HH:MM:SS format):</label>
+                            <input type="text" class="form-control" id="raceTime" value="1:55:00" placeholder="e.g. 18:22 or 1:21:00" required>
+                        </div>
+
+                        <hr class="text-muted border-2 border-dashed my-4">
+                        
+                        <div class="mb-4">
+                            <label for="goalTime" class="form-label fw-semibold">Goal Marathon Time:</label>
+                            <select class="form-select" id="goalTime">
+                                <option value="3:00:00">3 Hours</option>
+                                <option value="3:15:00">3:15</option>
+                                <option value="3:30:00">3:30</option>
+                                <option value="3:45:00">3:45</option>
+                                <option value="4:00:00" selected>4 Hours</option>
+                            </select>
+                        </div>
+
+                        <hr class="text-muted border-2 border-dashed my-4">
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">Pacing Basis:</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="pacingBasis" id="basisCurrent" value="current" checked autocomplete="off">
+                                <label class="btn btn-outline-primary fw-bold" for="basisCurrent">Use Current Fitness</label>
+
+                                <input type="radio" class="btn-check" name="pacingBasis" id="basisGoal" value="goal" autocomplete="off">
+                                <label class="btn btn-outline-primary fw-bold" for="basisGoal">Use Race Goal</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="type" class="form-label fw-semibold">Workout Type:</label>
+                            <select class="form-select" id="type">
+                                <option value="vo2" selected>VO2max Intervals (5k pace equivalent)</option>
+                                <option value="lt">Cruise Intervals (10k pace, short rest)</option>
+                                <option value="tempo">Continuous Tempo / Threshold</option>
+                            </select>
+                        </div>
+
+                        <!-- Distance and Ratio are now paired together -->
+                        <div class="row mb-5 align-items-center">
+                            <div class="col-md-7 mb-3 mb-md-0" id="distCol">
+                                <label for="dist" id="distLabel" class="form-label fw-semibold">Target Rep Distance:</label>
+                                <select class="form-select" id="dist">
+                                    <!-- Populated dynamically by JS -->
+                                </select>
+                            </div>
+                            <div class="col-md-5" id="ratioCol">
+                                <label for="ratio" class="form-label fw-semibold d-flex justify-content-between">
+                                    <span>Rest/Work Ratio:</span>
+                                    <span id="ratioDisplay" class="text-primary fw-bold">75%</span>
+                                </label>
+                                <input type="range" class="form-range" id="ratio" value="75" min="50" max="75" step="5">
+                            </div>
+                        </div>
+                        
+                        
+                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-6">Calculate Exact Pacing</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Output Div -->
+            <div id="out" class="mt-4"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DYNAMIC DISTANCE OPTIONS ---
+    const distOptions = {
+        vo2: [
+            {val: 400, label: "400m"},
+            {val: 600, label: "600m"},
+            {val: 800, label: "800m", selected: true},
+            {val: 1000, label: "1000m (1k)"},
+            {val: 1200, label: "1200m"}
+        ],
+        lt: [
+            {val: 800, label: "800m"},
+            {val: 1000, label: "1000m (1k)", selected: true},
+            {val: 1200, label: "1200m"},
+            {val: 1609.34, label: "1 Mile"},
+            {val: 3218.68, label: "2 Miles"}
+        ],
+        tempo: [
+            {val: 15, label: "15 Minutes (Short / Early Block Tempo)"},
+            {val: 20, label: "20 Minutes (Strict JD Threshold)", selected: true},
+            {val: 30, label: "30 Minutes (Extended Threshold)"},
+            {val: 45, label: "45 Minutes (Extended Tempo)"},
+            {val: 60, label: "60 Minutes (Marathon Pace Block)"}
+        ]
+    };
+
+    const typeSelect = document.getElementById('type');
+    const distSelect = document.getElementById('dist');
+    const distLabel = document.getElementById('distLabel');
+    const distCol = document.getElementById('distCol');
+    const ratioCol = document.getElementById('ratioCol');
+    const ratioInput = document.getElementById('ratio');
+    const ratioDisplay = document.getElementById('ratioDisplay');
+
+    let isInitialLoad = true;
+
+    ratioInput.addEventListener('input', (e) => {
+        ratioDisplay.innerText = e.target.value + '%';
+    });
+
+    const updateSliderBounds = (type) => {
+        if (type === 'tempo') {
+            ratioInput.min = 0;
+            ratioInput.max = 0;
+            ratioInput.value = 0;
+            ratioInput.disabled = true;
+        } else if (type === 'vo2') {
+            ratioInput.min = 50;
+            ratioInput.max = 75;
+            ratioInput.step = 5;
+            ratioInput.disabled = false;
+        } else if (type === 'lt') {
+            ratioInput.min = 15;
+            ratioInput.max = 30; // Threshold is tightly bound to low rest
+            ratioInput.step = 5;
+            ratioInput.disabled = false;
+        }
+    };
+
+    // Changes dropdowns based on workout type chosen
+    const renderDistances = () => {
+        const type = typeSelect.value;
+        distSelect.innerHTML = '';
+        let selectedDistMeters = 0;
+
+        distOptions[type].forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.val;
+            el.textContent = opt.label;
+            if (opt.selected) {
+                el.selected = true;
+                selectedDistMeters = opt.val;
+            }
+            distSelect.appendChild(el);
+        });
+        
+        updateSliderBounds(type);
+
+        if (type === 'tempo') {
+            distLabel.innerText = 'Continuous Run Duration:';
+            ratioCol.style.display = 'none';
+            distCol.className = 'col-12';
+        } else {
+            distLabel.innerText = 'Target Rep Distance:';
+            ratioCol.style.display = 'block';
+            distCol.className = 'col-md-7 mb-3 mb-md-0';
+            
+            // Set reasonable defaults when switching types
+            if (!isInitialLoad) {
+                if (type === 'vo2') {
+                    if (selectedDistMeters <= 600) ratioInput.value = 50;
+                    else if (selectedDistMeters === 800) ratioInput.value = 60;
+                    else ratioInput.value = 75; // 1k and up needs massive rest
+                } 
+                if (type === 'lt') ratioInput.value = 20;  // Standard Jack Daniels 1:5 ratio (20%)
+            }
+        }
+        
+        ratioDisplay.innerText = ratioInput.value + '%';
+    };
+
+    // Auto-update Ratio when Distance is manually changed
+    distSelect.addEventListener('change', (e) => {
+        const type = typeSelect.value;
+        const distMeters = parseFloat(e.target.value);
+        
+        if (type === 'vo2') {
+            if (distMeters <= 600) ratioInput.value = 50;
+            else if (distMeters === 800) ratioInput.value = 60;
+            else ratioInput.value = 75; 
+        } else if (type === 'lt') {
+            ratioInput.value = 20;
+        }
+        
+        // Safety clamp in case of edge scenarios before bound update
+        if(parseInt(ratioInput.value) > parseInt(ratioInput.max)) ratioInput.value = ratioInput.max;
+        if(parseInt(ratioInput.value) < parseInt(ratioInput.min)) ratioInput.value = ratioInput.min;
+        
+        ratioDisplay.innerText = ratioInput.value + '%';
+    });
+
+    typeSelect.addEventListener('change', () => {
+        isInitialLoad = false;
+        renderDistances();
+    });
+    
+    renderDistances();
+    isInitialLoad = false;
+
+    // --- MATH & VDOT ENGINE ---
+    const calculateVDOT = (distanceMeters, timeSeconds) => {
+        if (!distanceMeters || !timeSeconds) return 0;
+        const t = timeSeconds / 60; 
+        const v = distanceMeters / t; 
+        const vo2Req = 0.182258 * v + 0.000104 * Math.pow(v, 2) - 4.60;
+        const percentVo2Max = 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t);
+        return vo2Req / percentVo2Max;
+    };
+
+    const parseTime = (str) => {
+        if (!str) return 0;
+        const parts = str.split(':').map(Number);
+        if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) 
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) 
+            return parts[0] * 60 + parts[1];
+        return 0;
+    };
+
+    const fmtLong = (s) => {
+        s = Math.round(s);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (h > 0) return h + ':' + m.toString().padStart(2, '0') + ':' + sec.toString().padStart(2, '0');
+        return m + ':' + sec.toString().padStart(2, '0');
+    };
+
+    const updateLiveData = () => {
+        const timeSec = parseTime(document.getElementById('raceTime').value);
+        const raceDistMi = parseFloat(document.getElementById('raceDist').value);
+        const circleContainer = document.getElementById('vdotCircleContainer');
+        
+        if (timeSec > 0) {
+            const vdot = calculateVDOT(raceDistMi * 1609.34, timeSec);
+            document.getElementById('headerVdotNum').innerText = vdot.toFixed(1);
+            circleContainer.style.display = 'flex';
+        } else {
+            circleContainer.style.display = 'none';
+        }
+    };
+
+    let lastDistMi = parseFloat(document.getElementById('raceDist').value);
+
+    document.getElementById('raceDist').addEventListener('change', (e) => {
+        const timeSec = parseTime(document.getElementById('raceTime').value);
+        const newDistMi = parseFloat(e.target.value);
+        
+        if (timeSec > 0 && lastDistMi > 0) {
+            const newTimeSec = timeSec * Math.pow((newDistMi / lastDistMi), 1.06);
+            document.getElementById('raceTime').value = fmtLong(newTimeSec);
+        }
+        
+        lastDistMi = newDistMi;
+        updateLiveData(); 
+    });
+
+    document.getElementById('raceTime').addEventListener('input', updateLiveData);
+    updateLiveData();
+
+    const fmt = (s) => Math.floor(s/60) + ':' + Math.round(s%60).toString().padStart(2, '0');
+
+    // Calculates target pace in seconds/mile from VDOT and target intensity (%VO2max)
+    const getPaceFromVDOT = (vdot, percentVo2) => {
+        if (!vdot || vdot <= 0) return 0;
+        const targetVo2 = vdot * percentVo2;
+        const a = 0.000104;
+        const b = 0.182258;
+        const c = -(4.60 + targetVo2);
+        const v = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); // velocity in meters/min
+        return (1609.34 / v) * 60; // seconds per mile
+    };
+
+    document.getElementById('calc').onsubmit = (e) => {
+        e.preventDefault();
+        
+        const timeSec = parseTime(document.getElementById('raceTime').value);
+        const goalSec = parseTime(document.getElementById('goalTime').value);
+        const raceDistMi = parseFloat(document.getElementById('raceDist').value);
+        const targetDistVal = parseFloat(document.getElementById('dist').value);
+        const type = document.getElementById('type').value;
+        const pacingBasis = document.querySelector('input[name="pacingBasis"]:checked').value;
+
+        let vdot = 0;
+        if (pacingBasis === 'goal') {
+            vdot = calculateVDOT(26.2188 * 1609.34, goalSec);
+        } else {
+            vdot = calculateVDOT(raceDistMi * 1609.34, timeSec);
+        }
+
+        let targetPaceSec;
+        let workSec;
+        let targetDistMi;
+
+        if (type === 'vo2') {
+            targetDistMi = targetDistVal / 1609.34;
+            targetPaceSec = getPaceFromVDOT(vdot, 1.00); // 100% VDOT (5K / VO2max Pace)
+            workSec = Math.round(targetPaceSec * targetDistMi);
+        } else if (type === 'lt') {
+            targetDistMi = targetDistVal / 1609.34;
+            targetPaceSec = getPaceFromVDOT(vdot, 0.94); // 94% VDOT (Cruise Intervals / 10K Pace)
+            workSec = Math.round(targetPaceSec * targetDistMi);
+        } else if (type === 'tempo') {
+            workSec = targetDistVal * 60; 
+
+            if (targetDistVal === 15) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.95); // 95% VDOT (15m Short Tempo / 6:05 pace)
+            } else if (targetDistVal === 20) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.94); // 94% VDOT (20m Standard Threshold)
+            } else if (targetDistVal === 30) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.90); // 90% VDOT (30m Extended Threshold)
+            } else if (targetDistVal === 45) {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.86); // 86% VDOT (45m HM Pace Tempo)
+            } else {
+                targetPaceSec = getPaceFromVDOT(vdot, 0.82); // 82% VDOT (60m Marathon Pace Block)
+            }
+            targetDistMi = workSec / targetPaceSec;
+        }
+        
+        const ratioPercent = parseInt(ratioInput.value) || 0;
+        const targetRatio = ratioPercent / 100.0;
+        
+        let restSec = Math.round(workSec * targetRatio);
+        let restSecString = (ratioPercent === 0) ? "None" : fmtLong(restSec);
+
+        let goalMPString = "";
+        if (goalSec > 0) {
+            let goalMPSec = goalSec / 26.2188;
+            let goalMPH = (3600 / goalMPSec).toFixed(1);
+            goalMPString = "<small class='text-uppercase fw-bold text-muted d-block mb-2'>Target Goal MP: " + fmt(goalMPSec) + "/mi (" + goalMPH + " mph)</small>";
+        }
+
+        let targetMPH = (3600 / targetPaceSec).toFixed(1);
+
+        let warningString = "";
+        if (type === 'vo2' && workSec >= 300) {
+            warningString = "<div class='alert alert-warning shadow-sm border-0 mt-3 mb-0' role='alert' style='font-size: 0.9em;'><strong>⚠️ JD Limit Reached:</strong> Jack Daniels advises VO2max reps should not exceed 5 minutes. Consider selecting a shorter Target Rep Distance to prevent form breakdown and excessive lactic buildup.</div>";
+        }
+
+        // Build output block safely using basic concatenation and formatting to avoid any template literal escaping bugs across browsers
+        let outputBody = "";
+        if (type === 'tempo') {
+            outputBody = "<p class='mb-1'><strong>Total Duration:</strong> " + fmtLong(workSec) + "</p>" +
+                         "<p class='mb-0'><strong>Total Distance Covered:</strong> " + targetDistMi.toFixed(2) + " Miles</p>";
+        } else {
+            outputBody = "<p class='mb-1'><strong>Work Time per rep:</strong> " + fmtLong(workSec) + "</p>" +
+                         "<p class='mb-0'><strong>Rest Time per rep:</strong> " + restSecString + "</p>";
+        }
+
+        document.getElementById('out').innerHTML = "<div class='alert alert-primary shadow-sm border-0 mb-0' role='alert'>" +
+                goalMPString +
+                "<hr class='border-primary opacity-25'>" +
+                "<p class='mb-1'><strong>Target Pace:</strong> " + fmt(targetPaceSec) + " / mi (" + targetMPH + " mph)</p>" +
+                outputBody +
+            "</div>" + warningString;
+    };
+</script>
+
+</body>
+</html>
